@@ -1,0 +1,367 @@
+Strict
+
+#rem
+	Script:			Fruit2.cxs
+	Description:	A very basic game
+	Author: 		Sal Gunduz via adapting Michael Hartlef's fantomCX examples code
+	Version:      	1.0
+#End
+
+' Set the AutoSuspend functionality to TRUE so OnResume/OnSuspend are called
+#MOJO_AUTO_SUSPEND_ENABLED=True
+
+'Set to false to disable webaudio support for mojo audio, and to use older multimedia audio system instead.
+#HTML5_WEBAUDIO_ENABLED=True
+
+' Import the fantomCX framework which imports mojo2 itself
+Import fantomCX
+
+Const STATE_MENU:= 1
+Const STATE_PLAYING:= 2
+Const STATE_GAMEOVER:= 3
+
+' The _g variable holds an instance to the cGame class
+Global _g:cGame
+
+
+	
+
+
+
+'***************************************
+' The cGame class controls the app
+Class cGame Extends App
+	' Create a field to store the instance of the cEngine class, which is an instance
+	' of the ftEngine class itself
+	Field fE:cEngine
+	
+	' Define a constant for a timer	
+	Const engineTimer:Int = 1
+	
+	
+	' Define 2 constants to identify each type of object
+	Const ENEMY:Int = 100
+	Const GOODGUY:Int = 101
+
+	
+	'Store Collision Groups
+	Const grpPlayer:Int = 1
+	Const grpFruit:Int = 2
+	
+	'Store objects
+	Field player:ftObject
+	Field zoneBox:ftObject
+	Field fruitObj:ftObject
+	
+	'Store Player Attributes
+	Field playerY:Float = 0.0
+	Field playerX:Float = 0.0
+	Field score:Int = 0
+	
+	
+	Field mySound:ftSound
+	Field mySound2:ftSound
+	Field mySound3:ftSound
+	Field myMusic:ftSound
+	
+	Global GameState:Int = STATE_MENU
+	'------------------------------------------
+	
+	Method SetState:Int(state:Int)
+
+		GameState = state
+
+		Select GameState
+
+			Case STATE_MENU
+				Print "Click Mouse to play"
+
+			Case STATE_PLAYING
+				Print "Press ESC to exit"
+				
+			Case STATE_GAMEOVER
+				Print "Game Over. You scored " + _g.score
+				_g.score = 0
+				Print "Click Mouse to play again"
+			Default
+				Print "ERROR: Unknown game state!"
+
+		End
+		Return 0
+	End
+	
+	Method SpawnObject:Void()
+		' Create a circle along the X horizontal 
+	'	Local fruitObj:= fE.CreateCircle(30, Rnd(20, fE.GetCanvasWidth() -20), fE.GetCanvasHeight() -480)
+	
+		If Rnd(0, 6) < 1
+			fruitObj = fE.CreateImage("apple.png", Rnd(20, fE.GetCanvasWidth() -20), fE.GetCanvasHeight() -480)
+			fruitObj.SetTag(GOODGUY)
+			fruitObj.SetID(2)
+		ElseIf Rnd(0, 6) < 2
+			fruitObj = fE.CreateImage("banana.png", Rnd(20, fE.GetCanvasWidth() -20), fE.GetCanvasHeight() -480)
+			fruitObj.SetTag(GOODGUY)
+			fruitObj.SetID(2)
+		
+		ElseIf Rnd(0, 6) < 3
+			fruitObj = fE.CreateImage("orange.png", Rnd(20, fE.GetCanvasWidth() -20), fE.GetCanvasHeight() -480)
+			fruitObj.SetTag(GOODGUY)
+			fruitObj.SetID(2)
+			
+		Else
+			fruitObj = fE.CreateImage("bomb.png", Rnd(20, fE.GetCanvasWidth() -20), fE.GetCanvasHeight() -480)
+			fruitObj.SetTag(ENEMY)
+			fruitObj.SetID(3)
+		EndIf
+		
+		
+	
+		fruitObj.SetScale(1, True)
+		fruitObj.SetColGroup(grpFruit)							'Set collision group
+		fruitObj.SetColWith(grpPlayer, True)					'Set collision with player
+		fruitObj.SetSpeed(Rnd(25, 55), Rnd(170, 190))
+		' Now create a timer to spawn the next object
+		fE.CreateTimer(engineTimer, Rnd(200, 1500))
+		
+	End
+	'------------------------------------------
+	Method OnCreate:Int()
+		' Create an instance of the fantomCX, which was created via the cEngine class
+		fE = New cEngine
+		
+		' Create a timer without a connection to an object which creates new circles at every second
+		fE.CreateTimer(engineTimer, 500)
+		
+		player = fE.CreateImage("hand.png", 340, 445)
+		player.SetScale(1, True)
+		'player = fE.CreateBox(32, 32, 340, 445)
+		'player.SetColor(225, 228, 145)
+		'-------------------------------------------------------------------------------------------------------------
+		player.SetID(1)
+		playerY = player.GetPosY()
+		playerX = player.GetPosX()
+		zoneBox = fE.CreateBox(54, 44, 350, 445)
+		'zoneBox.SetColor(178, 34, 34)							'Red
+		zoneBox.SetAlpha(0)
+		'----------------------------------------------------------------
+		
+		zoneBox.SetColGroup(grpPlayer)						'Set collision group
+		zoneBox.SetColType(ftEngine.ctBox)					'ctCirlce, ctBox, ctBound
+		zoneBox.SetParent(player)
+		
+		' Load a sound and music file
+		mySound = fE.LoadSound("shoot.wav")
+		myMusic = fE.LoadMusic("loop.wav")
+		mySound2 = fE.LoadSound("bomb.wav")
+		mySound3 = fE.LoadSound("blip.wav")
+		
+		If myMusic <> Null Then myMusic.Play()
+		
+		' Set the highest sound channel to be used
+		fE.SetMaxSoundChannel(3)
+		
+		Return 0
+	End
+	'------------------------------------------
+	Method OnUpdate:Int()
+		' If the CLOSE key was hit, exit the app ... needed for GLFW and Android I think. 
+		If KeyHit(KEY_CLOSE) Then fE.ExitApp()
+		
+		' Determine the delta time and the update factor for the engine
+		Local timeDelta:Float = Float(fE.CalcDeltaTime()) / 60.0
+		
+		
+		Select GameState
+			Case STATE_MENU
+			
+				If KeyHit(KEY_LMB)
+					SetState STATE_PLAYING
+				Endif
+		
+			Case STATE_PLAYING
+			
+				If KeyHit(KEY_ESCAPE)
+					SetState STATE_MENU
+				Endif
+		
+
+				If KeyHit(KEY_M)
+					If myMusic.GetPaused() = True
+						myMusic.SetPaused(False)
+					Else
+						myMusic.SetPaused(True)
+					EndIf
+				EndIf
+				
+				
+		
+		' Update all objects of the engine
+				If fE.GetPaused() = False Then
+					fE.Update(timeDelta)
+					fE.CollisionCheck()
+				EndIf
+		
+			Case STATE_GAMEOVER
+			
+			
+				If KeyHit(KEY_LMB)
+					SetState STATE_MENU
+
+				Endif
+	
+		End
+		Return 0
+	End
+	'------------------------------------------
+	Method OnRender:Int()
+		' Check if the engine is not paused
+		
+
+			
+				If fE.GetPaused() = False Then
+					' Clear the screen 
+					fE.Clear(0, 0, 20)
+					
+				'	fE.SetColor(255, 255, 0)
+					'fE.GetCanvas().DrawText("ObjCount: " + fE.GetObjCount(), 20, 20)
+				'	fE.GetCanvas().DrawText("Score " + _g.score, 20, 35)
+					
+	
+					
+				
+					' Render all visible objects of the engine
+					fE.Render()
+					
+					' Now draw the current FPS value to the screen
+		
+		
+					' Last, flip the previously drawn content to the screen, make it visible
+					fE.RenderFlush()			
+				EndIf
+
+		
+		Return 0
+	End
+	'------------------------------------------
+	Method OnLoading:Int()
+		' If loading of assets in OnCreate takes longer, render a simple loading screen
+		fE.RenderLoadingBar()
+		
+		Return 0
+	End
+	'------------------------------------------
+	Method OnResume:Int()
+		' Set the pause flag of the engine to FALSE so objects, timers and transitions are updated again
+		fE.SetPaused(False)
+		
+		Return 0
+	End
+	'------------------------------------------
+	Method OnSuspend:Int()
+		' Set the pause flag of the engine to TRUE so objects, timers and transitions are paused (not updated)
+		fE.SetPaused(True)
+		
+		Return 0
+	End
+End	
+
+'***************************************
+' The cEngine class extends the ftEngine class to override the On... methods
+Class cEngine Extends ftEngine
+
+
+
+	Method OnObjectCollision:Int(obj:ftObject, obj2:ftObject)
+		' This method is called when an object collided with another object
+	
+		If obj.GetTag() = _g.ENEMY
+			_g.mySound2.Play()
+			obj.Remove()
+			_g.SetState STATE_GAMEOVER
+		EndIf
+		
+		If obj.GetTag() = _g.GOODGUY
+			_g.mySound3.Play()   'how to play sound on collision?
+			obj.Remove()
+			_g.score = _g.score + 1
+		EndIf		
+		
+		Return 0
+	End
+	'------------------------------------------
+	Method OnObjectUpdate:Int(obj:ftObject)
+		' This method is called when an object finishes its update. You can deactivate the event via ftObject.ActivateUpdateEvent.
+		If obj.GetTag() = _g.GOODGUY
+			obj.SetAngle(Rnd(0, 3), True)
+		EndIf
+		
+		
+		' Remove the enemy object depending on its tag and X-Position
+		If obj.GetTag() = _g.ENEMY And obj.GetPosY() > 500
+			obj.Remove()
+		Endif
+		' Remove the GOODGUY object depending on its tag and X-Position
+		If obj.GetTag() = _g.GOODGUY And obj.GetPosY() > 500
+			obj.Remove()
+		EndIf
+
+		
+		
+		
+		'If player
+		If obj.GetID() = 1
+			'UP
+			If KeyDown(KEY_LEFT)
+				obj.SetPosX(-2, True)
+			EndIf
+		EndIf
+		
+		
+		If obj.GetID() = 1
+			'UP
+			If KeyDown(KEY_RIGHT)
+				obj.SetPosX(2, True)
+			EndIf
+		EndIf
+			
+		If obj.GetID() = 1
+			If obj.GetPosX() <= 24
+				obj.SetPosX(24)
+			EndIf
+		EndIf
+		
+		If obj.GetID() = 1
+			If obj.GetPosX() >= 615
+				obj.SetPosX(615)
+			EndIf
+		EndIf
+		
+		
+		
+		Return 0
+	End
+    '------------------------------------------
+	Method OnTimer:Int(timerId:Int)
+		' This method is called when an engine timer was being fired.
+		If timerId = _g.engineTimer
+			_g.SpawnObject()
+		EndIf
+		
+	
+	
+		
+		Return 0
+	End	
+End
+
+'***************************************
+Function Main:Int()
+	' Create an instance of the cGame class and store it inside the global var '_g'
+	_g = New cGame
+	
+	Print "Click mouse to start. M toggles music"
+	
+	
+	Return 0
+End
+
